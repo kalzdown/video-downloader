@@ -21,24 +21,69 @@ function clearResult() {
 }
 
 // 👉 MOCK API — nanti ganti dengan API lu sendiri.
-async function fetchDownloadInfo(videoUrl) {
-  // ========== CALL_API_DI_SINI ==========
-  // Contoh kalau nanti pakai API sendiri:
-  //
-  // const res = await fetch("https://api-kamu.com/parse", {
-  //   method: "POST",
-  //   headers: { "Content-Type": "application/json" },
-  //   body: JSON.stringify({ url: videoUrl })
-  // });
-  // if (!res.ok) throw new Error("API error");
-  // return await res.json();
-  // ======================================
+  const apiUrl =
+    "https://www.tikwm.com/api/?url=" +
+    encodeURIComponent(videoUrl) +
+    "&hd=1";
 
-  // MOCK DATA buat demo (tanpa API beneran)
-  await new Promise((r) => setTimeout(r, 800));
+  const res = await fetch(apiUrl, {
+    method: "GET",
+    headers: {
+      "Accept": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error("API error, status: " + res.status);
+  }
+
+  const json = await res.json();
+
+  if (json.code !== 0) {
+    throw new Error(json.msg || "Gagal ambil data dari TikWM");
+  }
+
+  const data = json.data || {};
+
+  const downloads = [];
+
+  if (data.hdplay) {
+    downloads.push({
+      label: "MP4 HD (tanpa watermark)",
+      size: data.size || "",
+      url: data.hdplay,
+    });
+  }
+
+  if (data.play) {
+    downloads.push({
+      label: "MP4 (tanpa watermark)",
+      size: data.size || "",
+      url: data.play,
+    });
+  }
+
+  if (data.wmplay) {
+    downloads.push({
+      label: "MP4 (pakai watermark)",
+      size: data.size || "",
+      url: data.wmplay,
+    });
+  }
+
+  if (data.music && data.music.play) {
+    downloads.push({
+      label: "Audio (MP3)",
+      size: data.music.duration ? data.music.duration + "s" : "",
+      url: data.music.play,
+    });
+  }
+
   return {
-    title: "Contoh Video",
-    downloads: [
+    title: data.title || "Video TikTok",
+    downloads,
+  };
+}
       {
         label: "MP4 720p (tanpa watermark)",
         size: "3.1 MB",
