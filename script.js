@@ -31,7 +31,7 @@ function clearResult() {
 // =======================
 async function fetchDownloadInfo(videoUrl) {
   const apiUrl =
-    "https://api.douyin.wtf/api?url" +
+    "https://api.tikhub.io" +
     encodeURIComponent(videoUrl) +
     "&hd=1";
 
