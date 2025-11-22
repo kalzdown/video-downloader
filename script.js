@@ -250,31 +250,33 @@ function renderResult(payload) {
   }
 
   // Title
-  if (title) {
-    const h = document.createElement("div");
-    h.style.fontWeight = "700";
-    h.style.margin = "8px 0";
-    h.textContent = title;
-    resultList.appendChild(h);
-  }
+if (title) {
+  const h = document.createElement("div");
+  h.style.fontWeight = "700";
+  h.style.margin = "8px 0";
+  h.textContent = title;
+  resultList.appendChild(h);
+}
 
-  // Render download rows (video downloads)
-  downloads.forEach(d => {
-    const node = document.createElement("div");
-    node.className = "result-item";
-    node.innerHTML = `
-      <div style="display:flex;flex-direction:column;margin-bottom:8px;">
-        <div style="font-weight:600">${d.label}</div>
-        <div style="opacity:.75;font-size:13px">${d.size || ""}</div>
-      </div>
+// HAPUS semua detected kecuali 1
+downloads.splice(1);
 
-      <div class="download-actions">
-        <a href="${d.url}" target="_blank" class="open-btn">Open</a>
-        <a href="${d.url}" download class="download-btn">Download</a>
-      </div>
-    `;
-    resultList.appendChild(node);
-  });
+// Render download rows (video downloads)
+downloads.forEach(d => {
+  const node = document.createElement("div");
+  node.className = "result-item";
+  node.innerHTML = `
+    <div style="display:flex;flex-direction:column;margin-bottom:8px;">
+      <div style="font-weight:600">${d.label}</div>
+      <div style="opacity:.75;font-size:13px">${d.size || ""}</div>
+    </div>
+
+    <div class="download-actions">
+      <a href="${d.url}" download class="download-btn">Download Video</a>
+    </div>
+  `;
+  resultList.appendChild(node);
+});
 
   // ===== new: row with Download Foto + Download Audio (single buttons) =====
   // Only show when at least one exists (photoUrl or audioUrl)
