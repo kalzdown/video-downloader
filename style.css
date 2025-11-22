@@ -144,8 +144,20 @@ body {
 }
 
 /* ---- RESULT ---- */
-.result {
-  margin-top: 20px;
+/* JARAK HASIL (Detected + tombol) */
+.result-item {
+  margin-bottom: 22px;        /* jarak antar blok */
+}
+
+.result-item > div:first-child {
+  margin-bottom: 10px;        /* jarak teks "Detected" ke tombol */
+}
+
+/* Tombol OPEN & DOWNLOAD */
+.result-item a {
+  margin-right: 10px;         /* jarak antar tombol */
+  margin-top: 5px;            /* jarak dari teks ke tombol */
+  display: inline-block;
 }
 
 .result h3 {
