@@ -374,17 +374,18 @@ clearBtn.addEventListener("click", () => {
 // pastikan resultList sudah ada (element di DOM)
 if (resultList) {
   resultList.addEventListener("click", async (e) => {
-    const btn = e.target.closest(".btn-download");
-    if (!btn) return; // bukan tombol kita
-    e.preventDefault();
+  const btn = e.target.closest(".btn-download");
+  if (!btn) return;
+  e.preventDefault();
 
-    const url = btn.dataset.url || btn.getAttribute("href");
-    const filename = btn.dataset.fn || "video.mp4";
-
-    if (!url) {
-      showStatus("URL download tidak tersedia.", "error");
+  // CEK URL INPUT KOSONG
+  if (!urlInput.value.trim()) {
+      showStatus("Masukkan URL video dulu.", "error");
       return;
-    }
+  }
+
+  const url = btn.dataset.url || btn.getAttribute("href");
+  const filename = btn.dataset.fn || "video.mp4";
 
     // Cara 1: biarkan browser handle download (download attr) - paling sederhana
     // buat anchor sementara dan klik
