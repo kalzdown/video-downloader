@@ -528,8 +528,166 @@ async function forceDownloadVideo(url) {
     alert("Gagal download video: " + err.message);
   }
 }
+/* ----------------------------
+   Lightning overlay (JS)
+   - paste this near the end of script.js, BEFORE `clearResults(); hideStatus();`
+   ---------------------------- */
+(function attachLightningOverlay() {
+  // create canvas overlay
+  const canvas = document.createElement("canvas");
+  canvas.id = "lightningOverlay";
+  canvas.style.position = "fixed";
+  canvas.style.inset = "0";
+  canvas.style.pointerEvents = "none";
+  canvas.style.zIndex = "0"; // .page has z-index:1 so UI stays above overlay
+  canvas.style.mixBlendMode = "screen";
+  document.body.appendChild(canvas);
+
+  const ctx = canvas.getContext("2d");
+  let w = canvas.width = innerWidth;
+  let h = canvas.height = innerHeight;
+  const DPR = Math.max(1, window.devicePixelRatio || 1);
+  canvas.width = w * DPR;
+  canvas.height = h * DPR;
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
+  ctx.scale(DPR, DPR);
+
+  // small particle/lightning params
+  const flashes = []; // active flashes
+
+  function resize() {
+    w = canvas.width = innerWidth;
+    h = canvas.height = innerHeight;
+    canvas.width = w * DPR;
+    canvas.height = h * DPR;
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  addEventListener("resize", resize);
+
+  // helper: random range
+  function rnd(min, max) { return Math.random() * (max - min) + min; }
+
+  // create flash object
+  function spawnFlash() {
+    const cx = rnd(w * 0.1, w * 0.9);
+    const segments = Math.floor(rnd(3, 7));
+    const color = `rgba(180,220,255,${rnd(0.18,0.35)})`;
+    const life = rnd(420, 900); // ms
+    const width = rnd(1.2, 3.6);
+    const paths = [];
+
+    // build jagged path segments
+    let x = rnd(0, w);
+    let y = rnd(0, h * 0.2);
+    for (let i=0;i<segments;i++){
+      const nx = x + rnd(-w*0.15, w*0.15);
+      const ny = y + rnd(h*0.12, h*0.3);
+      paths.push({x, y, nx, ny});
+      x = nx; y = ny;
+    }
+
+    flashes.push({
+      paths, color, start: performance.now(), life, width,
+      glow: rnd(6, 26), flicker: Math.random() < 0.6
+    });
+  }
+
+  // occasional spawn
+  let lastSpawn = 0;
+  function maybeSpawn(ts) {
+    if (ts - lastSpawn > rnd(600, 3000)) {
+      if (Math.random() < 0.55) spawnFlash();
+      lastSpawn = ts;
+    }
+  }
+
+  // draw single flash with glow and slight flicker
+  function drawFlash(f, t) {
+    const elapsed = t - f.start;
+    const p = Math.min(1, elapsed / f.life);
+    const alphaFade = (1 - Math.pow(p, 2)); // fade out
+
+    // base glow
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    // glow layers
+    for (let g = 4; g >= 0; g--) {
+      ctx.lineWidth = f.width + (f.glow * g * 0.06);
+      ctx.strokeStyle = f.color.replace(/[\d.]+\)$/,'') + `${Math.max(0.02, 0.12*alphaFade/(g+1))})`;
+      ctx.beginPath();
+      for (const seg of f.paths) {
+        ctx.moveTo(seg.x, seg.y);
+        ctx.lineTo(seg.nx, seg.ny);
+      }
+      ctx.stroke();
+    }
+
+    // sharp core
+    ctx.lineWidth = f.width;
+    ctx.strokeStyle = f.color.replace(/[\d.]+\)$/,'') + `${0.95 * alphaFade})`;
+    ctx.beginPath();
+    for (const seg of f.paths) {
+      ctx.moveTo(seg.x, seg.y);
+      ctx.lineTo(seg.nx, seg.ny);
+    }
+    ctx.stroke();
+
+    // tiny flicker sparks
+    if (f.flicker && Math.random() < 0.12) {
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      const seg = f.paths[Math.floor(Math.random() * f.paths.length)];
+      ctx.beginPath();
+      ctx.arc((seg.x+seg.nx)/2 + rnd(-10,10), (seg.y+seg.ny)/2 + rnd(-10,10), rnd(1,3), 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // main animation loop
+  let lastTs = performance.now();
+  function frame(ts) {
+    const dt = ts - lastTs;
+    lastTs = ts;
+
+    // fade background of overlay slightly (so trails)
+    ctx.clearRect(0,0,w,h);
+    // subtle dim to keep overlay transient
+    // ctx.fillStyle = "rgba(0,0,0,0.02)"; ctx.fillRect(0,0,w,h);
+
+    maybeSpawn(ts);
+
+    // draw each flash; remove expired
+    for (let i = flashes.length - 1; i >= 0; i--) {
+      const f = flashes[i];
+      const age = ts - f.start;
+      if (age > f.life) {
+        flashes.splice(i,1);
+        continue;
+      }
+      drawFlash(f, ts);
+    }
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // initial few flashes for atmosphere
+  for (let i=0;i<2;i++) setTimeout(spawnFlash, i*300 + 80);
+
+  // allow manual trigger via window for dev/testing
+  window.__triggerLightning = spawnFlash;
+})();
+// init
+clearResults();
+hideStatus();
 /* NOTES:
  - Ganti API_BASE ke endpoint yang sesuai. Jika endpoint butuh POST / body JSON, ubah callApi() agar melakukan POST.
  - Jangan taruh API_KEY di client untuk production; buat server proxy dan simpan key di ENV.
  - Jika butuh, gue bisa siapkan contoh server-proxy (server.js + package.json) yang memanggil TikHub/TikWM dan meneruskan respons ke client tanpa CORS.
 */
+
