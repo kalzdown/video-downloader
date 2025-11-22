@@ -162,16 +162,14 @@ async function downloadBlob(url, filename = "video.mp4") {
 // Render result: map various possible response shapes into UI
 // ------------------------------------------------------
 function renderResult(payload) {
-  // normalize payload if wrapper { ok: true, result: {...} }
+  // normalize wrapper
   if (payload && payload.ok && payload.result) payload = payload.result;
 
-  // Try detect title/thumbnail/downloads
   const title = payload.title || payload.name || payload.desc || (payload.data && payload.data.title) || "";
   const thumbnail = pickThumbnail(payload);
 
-  // Gather download links
+  // collect downloads (video)
   const downloads = [];
-
   if (Array.isArray(payload.downloads) && payload.downloads.length) {
     payload.downloads.forEach(d => {
       downloads.push({
@@ -182,15 +180,11 @@ function renderResult(payload) {
       });
     });
   }
-
-  // common fields (tikwm-like)
   if (!downloads.length) {
     if (payload.play) downloads.push({ label: "Tanpa Watermark", url: payload.play, size: payload.size || "" });
     if (payload.wmplay) downloads.push({ label: "Dengan Watermark", url: payload.wmplay, size: payload.size || "" });
     if (payload.video && payload.video.play_addr) downloads.push({ label: "Play", url: payload.video.play_addr });
   }
-
-  // fallback: extract URLs from object
   if (!downloads.length) {
     const urls = Array.from(collectUrls(payload));
     const preferred = urls.filter(u => /\.mp4(\?|$)/i.test(u) || /\/play\/|\/video\//i.test(u) || /play/i.test(u));
@@ -198,19 +192,19 @@ function renderResult(payload) {
     uniq.forEach((u, i) => downloads.push({ label: `Detected ${i+1}`, url: u, size: "" }));
   }
 
-  // ALSO collect image/audio URLs from payload for separate foto/audio buttons
+  // collect images/audio for extra buttons
   const allUrls = Array.from(collectUrls(payload));
   const imageUrls = allUrls.filter(u => /\.(jpe?g|png|webp|gif)(\?|$)/i.test(u));
   const audioUrls = allUrls.filter(u => /\.(mp3|m4a|aac|ogg|wav)(\?|$)/i.test(u) || /audio/i.test(u));
-
   const audioUrl = audioUrls.length ? audioUrls[0] : null;
-  // prefer explicit thumbnail if exists
   const photoUrl = thumbnail || (imageUrls.length ? imageUrls[0] : null);
 
-  // UI: clear previous
+  // clear UI
   resultList.innerHTML = "";
+  if (playerBox) playerBox.classList.add("hidden");
+  if (thumbBox) thumbBox.classList.add("hidden");
 
-  // --- try to find a playable URL (mp4 / play-like) first ---
+  // pick playable (mp4/play-like)
   let playableUrl = null;
   for (const d of downloads) {
     if (d.url && ( /\.mp4(\?|$)/i.test(d.url) || /\/play\/|\/video\//i.test(d.url) )) {
@@ -223,16 +217,16 @@ function renderResult(payload) {
     if (firstCandidate) playableUrl = firstCandidate.url;
   }
 
-  // If we have a playable url and video player present -> show it
+  // If playable -> show video player (use poster if available)
   if (playableUrl && previewVideo && playerBox) {
-    try { previewVideo.crossOrigin = "anonymous"; } catch (e) {}
+    try { previewVideo.crossOrigin = "anonymous"; } catch(e){}
     previewVideo.src = playableUrl;
     if (photoUrl) previewVideo.poster = photoUrl;
     previewVideo.load();
     playerBox.classList.remove("hidden");
     if (thumbBox) thumbBox.classList.add("hidden");
   } else {
-    // show thumbnail if present (fallback)
+    // no playable: show thumbnail image if exists
     if (photoUrl) {
       if (thumbBox && thumbImg) {
         thumbImg.src = photoUrl;
@@ -246,7 +240,6 @@ function renderResult(payload) {
         resultList.appendChild(img);
       }
     }
-    if (playerBox) playerBox.classList.add("hidden");
   }
 
   // Title
@@ -258,7 +251,8 @@ function renderResult(payload) {
     resultList.appendChild(h);
   }
 
-  // Render download rows (video downloads)
+  // Render only "Open" button for each detected download (if you still want Open),
+  // but DO NOT render per-video Download button (we'll provide global Foto/Audio downloads instead).
   downloads.forEach(d => {
     const node = document.createElement("div");
     node.className = "result-item";
@@ -270,47 +264,49 @@ function renderResult(payload) {
 
       <div class="download-actions">
         <a href="${d.url}" target="_blank" class="open-btn">Open</a>
-        <a href="${d.url}" download class="download-btn">Download</a>
       </div>
     `;
     resultList.appendChild(node);
   });
 
-  // ===== new: row with Download Foto + Download Audio (single buttons) =====
-  // Only show when at least one exists (photoUrl or audioUrl)
-  if (photoUrl || audioUrl) {
-    const box = document.createElement("div");
-    box.className = "result-item";
-    box.style.display = "flex";
-    box.style.justifyContent = "flex-start";
-    box.style.gap = "12px";
-    box.style.marginTop = "6px";
-    box.style.alignItems = "center";
+  // === HERE: add single row with Download Foto + Download Audio (if available) ===
+  const extras = document.createElement("div");
+  extras.className = "result-item";
+  extras.style.display = "flex";
+  extras.style.gap = "12px";
+  extras.style.marginTop = "10px";
 
-    if (photoUrl) {
-      const aPhoto = document.createElement("a");
-      aPhoto.href = photoUrl;
-      aPhoto.download = "";
-      aPhoto.className = "download-btn";
-      aPhoto.textContent = "Download Foto";
-      box.appendChild(aPhoto);
-    }
+  if (photoUrl) {
+    const aPhoto = document.createElement("a");
+    aPhoto.href = photoUrl;
+    aPhoto.download = "";
+    aPhoto.className = "download-btn";
+    aPhoto.textContent = "Download Foto";
+    extras.appendChild(aPhoto);
+  }
 
-    if (audioUrl) {
-      const aAudio = document.createElement("a");
-      aAudio.href = audioUrl;
-      aAudio.download = "";
-      aAudio.className = "download-btn";
-      aAudio.textContent = "Download Audio";
-      box.appendChild(aAudio);
-    }
+  if (audioUrl) {
+    const aAudio = document.createElement("a");
+    aAudio.href = audioUrl;
+    aAudio.download = "";
+    aAudio.className = "download-btn";
+    aAudio.textContent = "Download Audio";
+    extras.appendChild(aAudio);
+  }
 
-    // if none available, don't append
-    resultList.appendChild(box);
+  // If neither exist, tampilkan hint kecil
+  if (extras.children.length) {
+    resultList.appendChild(extras);
+  } else {
+    const hint = document.createElement("div");
+    hint.style.opacity = "0.8";
+    hint.style.marginTop = "8px";
+    hint.textContent = "Tidak ada file foto/audio yang tersedia untuk diunduh.";
+    resultList.appendChild(hint);
   }
 
   resultBox.classList.remove("hidden");
-  }
+}
 
 // ------------------------------------------------------
 // Main flow: called when user clicks Gas
