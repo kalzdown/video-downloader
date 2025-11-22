@@ -837,6 +837,142 @@ async function forceDownloadVideo(url) {
   // expose trigger for debugging
   window.__triggerLightning = spawnFlash;
 })();
+/* ===== Lightning overlay animation =====
+   Paste this block into script.js before the "init" lines
+*/
+(function() {
+  const canvas = document.getElementById("lightningCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d", { alpha: true });
+
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(window.innerWidth * dpr);
+    canvas.height = Math.round(window.innerHeight * dpr);
+    canvas.style.width = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  // small helper: draw a jagged lightning bolt between (x1,y1) -> (x2,y2)
+  function drawBolt(ctx, x1, y1, x2, y2, thickness, alpha) {
+    const segs = Math.max(6, Math.floor(Math.hypot(x2-x1, y2-y1) / 20));
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    for (let i = 1; i <= segs; i++) {
+      const t = i / segs;
+      const nx = x1 + (x2 - x1) * t + (Math.random() - 0.5) * 40 * (1 - Math.abs(0.5 - t));
+      const ny = y1 + (y2 - y1) * t + (Math.random() - 0.5) * 30 * (1 - Math.abs(0.5 - t));
+      ctx.lineTo(nx, ny);
+    }
+    ctx.lineWidth = thickness;
+    ctx.strokeStyle = `rgba(180,230,255,${alpha})`;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = "rgba(120,200,255,0.9)";
+    ctx.stroke();
+
+    // inner brighter core
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    for (let i = 1; i <= segs; i++) {
+      const t = i / segs;
+      const nx = x1 + (x2 - x1) * t + (Math.random() - 0.5) * 18 * (1 - Math.abs(0.5 - t));
+      const ny = y1 + (y2 - y1) * t + (Math.random() - 0.5) * 12 * (1 - Math.abs(0.5 - t));
+      ctx.lineTo(nx, ny);
+    }
+    ctx.lineWidth = Math.max(1, thickness/3);
+    ctx.strokeStyle = `rgba(255,255,255,${Math.min(1, alpha*1.2)})`;
+    ctx.shadowBlur = 40;
+    ctx.shadowColor = "rgba(180,230,255,1)";
+    ctx.stroke();
+  }
+
+  // flash objects active on screen
+  const flashes = [];
+
+  function spawnFlash(opts = {}) {
+    // coords relative to viewport (0..1)
+    const x = opts.x ?? (0.45 + (Math.random()-0.5)*0.3);
+    const y = opts.y ?? (0.25 + (Math.random()-0.5)*0.5);
+    const len = opts.len ?? (0.18 + Math.random()*0.25); // fraction of screen
+    const angle = opts.angle ?? ( -0.7 + Math.random()*1.4 );
+    const life = opts.life ?? (220 + Math.random()*240);
+    const created = performance.now();
+    // compute end point
+    const w = window.innerWidth, h = window.innerHeight;
+    const sx = x * w, sy = y * h;
+    const ex = sx + Math.cos(angle) * len * w;
+    const ey = sy + Math.sin(angle) * len * h;
+
+    flashes.push({ sx, sy, ex, ey, life, created });
+  }
+
+  // spawn some ambient flashes (not too often)
+  setInterval(() => {
+    if (Math.random() < 0.45) spawnFlash();
+  }, 800);
+
+  // user can trigger bigger flash (dev)
+  window.__triggerLightning = function(xNorm, yNorm) {
+    spawnFlash({ x: xNorm || 0.5, y: yNorm || 0.4, len: 0.35, life: 360 });
+  };
+
+  // main loop
+  let last = performance.now();
+  function loop(ts) {
+    const dt = ts - last;
+    last = ts;
+
+    // clear with slight alpha to create trailing glow effect
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // draw each flash
+    for (let i = flashes.length -1; i >=0; i--) {
+      const f = flashes[i];
+      const age = ts - f.created;
+      if (age > f.life) {
+        flashes.splice(i,1);
+        continue;
+      }
+      const t = age / f.life;
+      // intensity: quick peak then fade
+      const intensity = Math.exp(-4 * t) + (1 - t) * 0.25;
+      const thickness = 6 * (1 - t) + 1;
+      const alpha = Math.min(1, intensity * 1.2);
+      // draw main bolt
+      drawBolt(ctx, f.sx, f.sy, f.ex, f.ey, thickness, alpha);
+      // occasional branching
+      if (Math.random() < 0.2) {
+        // make a short branch
+        const bx = f.sx + (f.ex - f.sx) * (0.3 + Math.random()*0.6);
+        const by = f.sy + (f.ey - f.sy) * (0.2 + Math.random()*0.6);
+        const bx2 = bx + (Math.random()-0.5) * 160;
+        const by2 = by + (Math.random()-0.5) * 120;
+        drawBolt(ctx, bx, by, bx2, by2, thickness * 0.6, alpha * 0.9);
+      }
+    }
+
+    // subtle global glow to emphasize body: draw radial at center if flashes length>0
+    if (flashes.length) {
+      for (let i=0;i<Math.min(flashes.length,3);i++){
+        const f = flashes[Math.floor(Math.random()*flashes.length)];
+        const g = ctx.createRadialGradient(f.ex, f.ey, 10, f.ex, f.ey, Math.max(window.innerWidth, window.innerHeight)*0.6);
+        g.addColorStop(0, 'rgba(100,170,255,0.06)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0,0,window.innerWidth, window.innerHeight);
+      }
+    }
+
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // expose small debug API for console:
+  // window.__triggerLightning(0.5, 0.45);
+})();
 // init
 clearResults();
 hideStatus();
