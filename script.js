@@ -261,23 +261,27 @@ if (title) {
 // HAPUS semua detected kecuali 1
 downloads.splice(1);
 
-// Render download rows (video downloads)
-downloads.forEach(d => {
-  const node = document.createElement("div");
-  node.className = "result-item";
-  node.innerHTML = `
-    <div style="display:flex;flex-direction:column;margin-bottom:8px;">
-      <div style="font-weight:600">${d.label}</div>
-      <div style="opacity:.75;font-size:13px">${d.size || ""}</div>
-    </div>
+// contoh: di dalam downloads.forEach(d => { ... })
+const node = document.createElement("div");
+node.className = "result-item";
+node.innerHTML = `
+  <div style="display:flex;flex-direction:column;margin-bottom:8px;">
+    <div style="font-weight:600">${d.label}</div>
+    <div style="opacity:.75;font-size:13px">${d.size || ""}</div>
+  </div>
 
-    <div class="download-actions">
-  <button class="download-btn" onclick="forceDownloadVideo('${d.url}')">
-    Download Video
-  </button>
-</div>
-  `;
-  resultList.appendChild(node);
+  <div class="download-actions">
+    <!-- tombol open / view (opsional) -->
+    <a href="${d.url}" target="_blank" class="open-btn">Open</a>
+
+    <!-- tombol download video langsung (pake class dan data yang sesuai) -->
+    <a href="${d.url}" class="btn-download download-btn" data-url="${d.url}"
+       data-fn="${(d.filename || "video").replace(/"/g,'')}.mp4" download>
+      Download
+    </a>
+  </div>
+`;
+resultList.appendChild(node);
 });
 
   // ===== new: row with Download Foto + Download Audio (single buttons) =====
@@ -362,26 +366,62 @@ clearBtn.addEventListener("click", () => {
   clearResults();
 });
 
-// Event delegation: tangani klik tombol download yang dibuat dinamis
+// pastikan resultList sudah ada (element di DOM)
 if (resultList) {
   resultList.addEventListener("click", async (e) => {
-    const dl = e.target.closest(".btn-download");
-    if (!dl) return;
-    const url = dl.dataset.url;
-    const fn = dl.dataset.fn || "video.mp4";
+    const btn = e.target.closest(".btn-download");
+    if (!btn) return; // bukan tombol kita
+    e.preventDefault();
+
+    const url = btn.dataset.url || btn.getAttribute("href");
+    const filename = btn.dataset.fn || "video.mp4";
+
     if (!url) {
       showStatus("URL download tidak tersedia.", "error");
       return;
     }
 
+    // Cara 1: biarkan browser handle download (download attr) - paling sederhana
+    // buat anchor sementara dan klik
     try {
-      await downloadBlob(url, fn);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.target = "_blank";
+      // jika cross-origin, browser mungkin abaikan download attr.
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showStatus("Memulai download...", "success");
     } catch (err) {
-      // error sudah ditangani di downloadBlob
+      console.error("Download failed:", err);
+      showStatus("Gagal memulai download langsung. Coba 'Open'.", "error");
     }
+
+    // Jika mau fallback yang lebih kuat (fetch -> blob -> download),
+    // uncomment bagian ini — berguna kalau browser mengabaikan atribut download karena CORS:
+    /*
+    try {
+      showStatus("Mengambil file...", "info");
+      const res = await fetch(url, { mode: "cors" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a2 = document.createElement("a");
+      a2.href = blobUrl;
+      a2.download = filename;
+      document.body.appendChild(a2);
+      a2.click();
+      a2.remove();
+      URL.revokeObjectURL(blobUrl);
+      showStatus("Download dimulai.", "success");
+    } catch (err) {
+      console.error("fetch-download failed:", err);
+      showStatus("Gagal download via fetch. Buka link saja.", "error");
+    }
+    */
   });
 }
-
 // init
 clearResults();
 hideStatus();
